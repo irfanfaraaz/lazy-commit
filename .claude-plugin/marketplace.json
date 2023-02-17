@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "lazy-commit",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "source": "./",
       "description": "Spread git commit timestamps retroactively to visualize work progress over time. Useful when meaningful work completes in one intensive burst but needs to show as steady progress across a date range.",
       "author": {

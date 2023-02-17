@@ -1,5 +1,6 @@
 {
   "name": "lazy-commit",
+  "version": "0.2.0",
   "description": "Spread git commit timestamps retroactively to visualize work progress over time.",
   "author": {
     "name": "Irfan Faraaz",
