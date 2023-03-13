@@ -77,7 +77,7 @@ git filter-repo --version
 ### Recommended: Via Claude Code Plugin Manager
 
 ```
-/plugin add https://github.com/irfanfaraaz/lazy-commit
+/plugin marketplace add https://github.com/irfanfaraaz/lazy-commit
 /plugin install lazy-commit
 ```
 
