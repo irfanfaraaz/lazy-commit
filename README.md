@@ -4,7 +4,9 @@
 
 ## Problem
 
-You complete meaningful work in one intensive burst (e.g., 1 day), but git history shows everything compressed into a single day. When communicating progress to stakeholders, it looks like you did 2 weeks of work in 24 hours—missing the narrative of gradual progress.
+Sometimes you finish 2 weeks of work in one intense day, but you do not want your Git history to make it obvious.
+Maybe you want a little breathing room before sharing the final update. Maybe you want to show progress phase by phase instead of dumping everything at once. The issue is that even if you worked through the task in logical steps, Git still shows all the commits packed into a single day.
+When managers or stakeholders check the history, it can look like the whole thing was already done long before you communicated it. This compressed timeline can mislead them into thinking the work was simpler or faster than it actually was, causing them to underestimate future similar tasks and set unrealistic expectations.
 
 ## Solution
 
@@ -39,18 +41,20 @@ Claude will:
 4. Ask for time-of-day preference (default: random afternoon)
 5. Show commits that will be rewritten
 6. Require confirmation before applying changes
-7. Execute `git filter-repo` with calculated timestamps
+7. Rewrite commits using `git filter-repo` (with `git commit-tree` fallback) with calculated timestamps
 8. Display before/after comparison
 
 ## Prerequisites
 
 - **Git** (any recent version)
-- **git-filter-repo** (required separately — see installation below)
 - **Claude Code** (any recent version)
+- **git-filter-repo** (recommended for optimal performance, optional with git-based fallback)
 
-### Installing git-filter-repo
+### Installing git-filter-repo (Optional)
 
-**macOS** (recommended):
+For best performance, install git-filter-repo:
+
+**macOS**:
 ```bash
 brew install git-filter-repo
 ```
@@ -67,10 +71,7 @@ sudo apt-get install git-filter-repo
 pip install git-filter-repo
 ```
 
-**Verify installation**:
-```bash
-git filter-repo --version
-```
+**Note**: If git-filter-repo is not installed, the plugin will automatically fall back to a git-based approach using `git commit-tree`.
 
 ## Installation
 
@@ -94,11 +95,23 @@ git clone https://github.com/irfanfaraaz/lazy-commit.git ~/.claude/plugins/lazy-
 
 ## How It Works
 
-The skill uses `git filter-repo` to rewrite commit metadata:
-- `GIT_AUTHOR_DATE`: When the commit was authored
-- `GIT_COMMITTER_DATE`: When the commit was applied
+The skill uses **`git filter-repo --commit-callback`** (industry standard, 10x faster) with an automatic fallback to **`git commit-tree`** (git-native, no dependencies):
 
-No diffs or content is changed—only timestamps.
+**Primary approach (git filter-repo)**:
+- Python callbacks for fine-grained timestamp control
+- Single-pass processing for large repositories
+- `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` precision
+
+**Fallback approach (git commit-tree)**:
+- Rebuilt commits with timestamp environment variables
+- Works even if git-filter-repo is not installed
+- Equally reliable, slightly slower
+
+**Safety guarantees (both approaches)**:
+- No content changes—only timestamps are modified
+- Tree hashes stay identical (no diffs change)
+- Commits are never deleted, only rebuilt with new identities
+- All metadata (author, message, parents) is preserved exactly
 
 ## Safety
 

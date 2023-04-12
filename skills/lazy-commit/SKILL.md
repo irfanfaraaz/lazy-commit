@@ -32,7 +32,7 @@ Users will invoke this skill with requests like:
 3. **Ask about time**: What time of day should commits be timestamped? (default: random afternoon 14:00-17:00)
 4. **Show preview**: List commits that will be rewritten with calculated new timestamps
 5. **Get confirmation**: Require explicit yes before proceeding
-6. **Execute rewrite**: Use `git commit-tree` to rebuild commits with new timestamps (preserves all content, no diffs changed)
+6. **Execute rewrite**: Use `git filter-repo --commit-callback` with Python to rewrite timestamps (preserves all content, no diffs changed)
 7. **Show results**: Display before/after timestamp comparison with commit hash changes noted
 
 ## Safety Guardrails
@@ -69,12 +69,12 @@ Users will invoke this skill with requests like:
 6. Calculate timestamps:
    - If **evenly**: date1 + (i × daySpan / commitCount) for each commit i
    - If **weighted**: proportion = (filesChanged_i / totalFilesChanged); date1 + (proportion × daySpan) for each commit i
-7. Rebuild commits using `git commit-tree`:
-   - For each commit in order:
-     - Set `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` environment variables
-     - Execute `git commit-tree <tree> -p <parent> -m "<message>"`
-     - Capture new commit hash
-   - Update branch ref to point to final rebuilt commit
+7. Rebuild commits using `git filter-repo --commit-callback` with Python:
+   - Build a timestamp map: `{ old_hash: new_timestamp, ... }`
+   - Execute `git filter-repo --commit-callback` with Python code that:
+     - Updates `commit.author.time` and `commit.committer.time` from the timestamp map
+     - Preserves all other commit metadata (message, author name/email, parents)
+   - Fallback to `git commit-tree` if filter-repo fails (lower-level but reliable approach)
 8. Show results: before/after timestamps with old→new commit hash mapping
 
 ## Input/Output
@@ -134,13 +134,25 @@ See examples/sample-spread.sh for:
 
 ## Notes for Claude
 
-**IMPLEMENTATION APPROACH**: Use `git commit-tree` instead of `git filter-repo`. Why?
-- `git commit-tree` is the lowest-level git command that directly creates commit objects
-- It guarantees timestamp control via `GIT_AUTHOR_DATE`/`GIT_COMMITTER_DATE` environment variables
-- Higher-level tools (git filter-repo, git rebase) have limitations for timestamp-only rewrites
-- **Critical**: This approach rebuilds commits (new hashes) but preserves ALL content—no file diffs change
+**IMPLEMENTATION APPROACH**: Use `git filter-repo --commit-callback` as primary, fallback to `git commit-tree`.
 
-**BEFORE PROCEEDING**: Verify git is available and working (`git --version`).
+**Primary (git filter-repo)**:
+- Industry-standard for history rewriting (10x faster than filter-branch)
+- Python callbacks provide fine-grained control over timestamps
+- Single-pass processing is efficient for large repositories
+- Integrates well with Claude's script automation
+
+**Fallback (git commit-tree)**:
+- Lower-level but reliable approach
+- No external dependencies beyond git
+- Works if git-filter-repo fails or isn't installed
+- Rebuilds commits manually with timestamp environment variables
+
+**Critical**: Both approaches rebuild commits (new hashes) but preserve ALL content—no file diffs change.
+
+**BEFORE PROCEEDING**: Verify git and git-filter-repo are available:
+- `git --version`
+- `git filter-repo --version` (or check fallback method)
 
 - Always confirm dates with user (parse flexible formats: "March 13", "3/13", "2026-03-13")
 - Time preference should default to random 14:00-17:00 if user doesn't specify
