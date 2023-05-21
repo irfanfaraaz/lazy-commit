@@ -1,0 +1,34 @@
+{
+  "name": "lazy-commit",
+  "owner": {
+    "name": "Irfan Faraaz",
+    "email": "irfanfaraaz03@gmail.com"
+  },
+  "metadata": {
+    "description": "Spread git commit timestamps retroactively to visualize work progress over time",
+    "homepage": "https://github.com/irfanfaraaz/lazy-commit"
+  },
+  "plugins": [
+    {
+      "name": "lazy-commit",
+      "version": "0.1.0",
+      "source": "./",
+      "description": "Spread git commit timestamps retroactively to visualize work progress over time. Useful when meaningful work completes in one intensive burst but needs to show as steady progress across a date range.",
+      "author": {
+        "name": "Irfan Faraaz",
+        "email": "irfanfaraaz03@gmail.com"
+      },
+      "homepage": "https://github.com/irfanfaraaz/lazy-commit",
+      "repository": "https://github.com/irfanfaraaz/lazy-commit.git",
+      "license": "MIT",
+      "keywords": [
+        "git",
+        "commit",
+        "timestamps",
+        "visualization",
+        "work-progress",
+        "git-tools"
+      ]
+    }
+  ]
+}

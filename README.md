@@ -74,14 +74,22 @@ git filter-repo --version
 
 ## Installation
 
-```bash
-git clone https://github.com/yourusername/lazy-commit-plugin.git ~/.claude-plugins/lazy-commit
-cc --reload-plugins
+### Recommended: Via Claude Code Plugin Manager
+
+```
+/plugin add https://github.com/irfanfaraaz/lazy-commit
+/plugin install lazy-commit
 ```
 
-Then invoke:
+Then invoke the skill:
 ```
 /lazy-commit spread my commits from March 13 to March 24
+```
+
+### Alternative: Manual Git Clone
+
+```bash
+git clone https://github.com/irfanfaraaz/lazy-commit.git ~/.claude/plugins/lazy-commit
 ```
 
 ## How It Works
