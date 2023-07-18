@@ -70,11 +70,14 @@ Users will invoke this skill with requests like:
    - If **evenly**: date1 + (i × daySpan / commitCount) for each commit i
    - If **weighted**: proportion = (filesChanged_i / totalFilesChanged); date1 + (proportion × daySpan) for each commit i
 7. Rebuild commits using `git filter-repo --commit-callback` with Python:
-   - Build a timestamp map: `{ old_hash: new_timestamp, ... }`
+   - Build a timestamp list indexed by commit order: `[b'<ts1> <tz>', b'<ts2> <tz>', ...]`
    - Execute `git filter-repo --commit-callback` with Python code that:
-     - Updates `commit.author.time` and `commit.committer.time` from the timestamp map
-     - Preserves all other commit metadata (message, author name/email, parents)
-   - Fallback to `git commit-tree` if filter-repo fails (lower-level but reliable approach)
+     - Uses `sys._callback_counter` for persistent state across callback invocations
+     - Assigns bytes to `commit.author_date` and `commit.committer_date` (format: `b'<timestamp> <timezone>'`)
+     - Preserves all other commit metadata (message, author name/email, parents, encoding)
+   - **Fallback**: If git-filter-repo fails, use `git commit-tree` with environment variables:
+     - For each commit in topological order, set `GIT_AUTHOR_DATE="<ts> <tz>"` and `GIT_COMMITTER_DATE="<ts> <tz>"` before invoking `git commit-tree`
+     - Rebuild parent chain manually (slightly more complex but no external dependencies)
 8. Show results: before/after timestamps with old→new commit hash mapping
 
 ## Input/Output
@@ -140,19 +143,23 @@ See examples/sample-spread.sh for:
 - Industry-standard for history rewriting (10x faster than filter-branch)
 - Python callbacks provide fine-grained control over timestamps
 - Single-pass processing is efficient for large repositories
-- Integrates well with Claude's script automation
+- **Key implementation detail**: Use `sys` module for persistent state across callback invocations (local variables don't persist)
+- **Format**: Assign bytes directly: `commit.author_date = b'<timestamp> <+timezone>'` (e.g., `b'1772353800 +0000'`)
+- Callback body only (no `def callback(commit):` wrapper—git-filter-repo adds that automatically)
 
 **Fallback (git commit-tree)**:
 - Lower-level but reliable approach
 - No external dependencies beyond git
 - Works if git-filter-repo fails or isn't installed
 - Rebuilds commits manually with timestamp environment variables
+- **Format**: Environment variables must include timezone: `GIT_AUTHOR_DATE="<timestamp> <+timezone>"` (e.g., `"1772353800 +0000"`)
+- Requires manual parent chain management but proven stable
 
 **Critical**: Both approaches rebuild commits (new hashes) but preserve ALL content—no file diffs change.
 
-**BEFORE PROCEEDING**: Verify git and git-filter-repo are available:
-- `git --version`
-- `git filter-repo --version` (or check fallback method)
+**BEFORE PROCEEDING**: Verify dependencies:
+- `git --version` (required for both)
+- `git filter-repo --version` (required for primary; missing triggers fallback)
 
 - Always confirm dates with user (parse flexible formats: "March 13", "3/13", "2026-03-13")
 - Time preference should default to random 14:00-17:00 if user doesn't specify
