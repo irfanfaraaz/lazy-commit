@@ -2,7 +2,49 @@
 
 ## Architecture
 
-The lazy-commit plugin is a single-skill workflow tool that uses `git filter-repo` to rewrite commit timestamps retroactively.
+The lazy-commit plugin is a single-skill workflow tool that uses git commit timestamp rewriting to spread work across dates retroactively.
+
+### Implementation Approaches
+
+Three tested methods for rewriting commit timestamps (in order of preference):
+
+#### 1. PRIMARY: git filter-repo --commit-callback
+- **Status**: ✅ Proven working
+- **Speed**: Fast (single pass, 10x faster than filter-branch)
+- **Format**: Python callback with bytes assignment
+- **Key detail**: Use `sys._callback_counter` for persistent state across invocations
+- **Code**:
+  ```python
+  import sys
+  if not hasattr(sys, '_callback_counter'):
+      sys._callback_counter = 0
+  if sys._callback_counter < len(timestamps):
+      commit.author_date = f"{timestamps[sys._callback_counter]}".encode()
+      commit.committer_date = f"{timestamps[sys._callback_counter]}".encode()
+      sys._callback_counter += 1
+  ```
+- **Dependencies**: Requires `git filter-repo` (optional, has fallback)
+
+#### 2. SECONDARY: git commit-tree
+- **Status**: ✅ Proven working
+- **Speed**: Slower (manual per-commit rebuild)
+- **Format**: Environment variables with timezone
+- **Key detail**: Must include timezone in format: `"<timestamp> <+timezone>"`
+- **Code**:
+  ```bash
+  GIT_AUTHOR_DATE="1772353800 +0000" GIT_COMMITTER_DATE="1772353800 +0000" \
+    git commit-tree <tree> -p <parent> -m "<message>"
+  ```
+- **Dependencies**: None (pure git)
+- **Use case**: When git-filter-repo not available
+
+#### 3. TERTIARY: git fast-export/fast-import
+- **Status**: ✅ Proven working
+- **Speed**: Medium
+- **Format**: Stream-based modification
+- **Key detail**: Parse export stream, modify author_date/committer_date lines, re-import
+- **Dependencies**: None (pure git)
+- **Use case**: Most robust for edge cases
 
 ### Components
 
@@ -73,9 +115,12 @@ Skill shows before/after comparison
    - [ ] No changes if user declines
 
 5. **Verify execution**:
-   - [ ] `git filter-repo` runs successfully
-   - [ ] Timestamps updated in git log
+   - [ ] Primary method (git filter-repo) attempts to run
+   - [ ] If git-filter-repo unavailable, falls back to git commit-tree
+   - [ ] Tertiary method (git fast-export) available as last resort
+   - [ ] Timestamps updated in git log (verify with `git log --format="%ai"`)
    - [ ] Commit content unchanged (git diff main shows nothing)
+   - [ ] Commit hashes changed (expected, since timestamps are part of commit object)
 
 ## Local Testing
 
