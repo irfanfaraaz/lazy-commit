@@ -32,15 +32,29 @@ Users will invoke this skill with requests like:
 3. **Ask about time**: What time of day should commits be timestamped? (default: random afternoon 14:00-17:00)
 4. **Show preview**: List commits that will be rewritten with calculated new timestamps
 5. **Get confirmation**: Require explicit yes before proceeding
-6. **Execute rewrite**: Use `git filter-repo` to rewrite `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`
-7. **Show results**: Display before/after timestamp comparison
+6. **Execute rewrite**: Use `git commit-tree` to rebuild commits with new timestamps (preserves all content, no diffs changed)
+7. **Show results**: Display before/after timestamp comparison with commit hash changes noted
 
 ## Safety Guardrails
 
+**Content Protection:**
+- ✅ **Preserve ALL content**: No file diffs change, only `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` metadata
+- ✅ **No commits deleted**: All commits are rebuilt with new timestamps (new hashes, same content)
+- ✅ **Verify tree integrity**: Before rewrite, confirm `git fsck --full` passes
+- ✅ **Post-rewrite verification**: After rewrite, run `git fsck --full` again and verify file counts match
+
+**User Protection:**
 - ✅ Refuse if commits are already pushed to remote (will show error with instructions)
 - ✅ Require explicit confirmation before rewriting
 - ✅ Show exact commits and timestamps before applying
-- ✅ Preserve all content (only dates change)
+- ✅ Display old→new commit hash mapping after rewrite
+- ✅ Check for dirty working directory (uncommitted changes must be stashed first)
+
+**Data Integrity:**
+- ✅ Preserve commit messages (no truncation/modification)
+- ✅ Preserve author name and email (only dates change)
+- ✅ Preserve commit parents (ancestry chain intact)
+- ✅ Preserve file permissions and modes
 
 ## Implementation Steps
 
@@ -55,9 +69,13 @@ Users will invoke this skill with requests like:
 6. Calculate timestamps:
    - If **evenly**: date1 + (i × daySpan / commitCount) for each commit i
    - If **weighted**: proportion = (filesChanged_i / totalFilesChanged); date1 + (proportion × daySpan) for each commit i
-7. Generate git filter-repo command with timestamp callback
-8. Execute `git filter-repo --commit-callback` with calculated dates
-9. Show results: before/after timestamps for first/last 3 commits
+7. Rebuild commits using `git commit-tree`:
+   - For each commit in order:
+     - Set `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` environment variables
+     - Execute `git commit-tree <tree> -p <parent> -m "<message>"`
+     - Capture new commit hash
+   - Update branch ref to point to final rebuilt commit
+8. Show results: before/after timestamps with old→new commit hash mapping
 
 ## Input/Output
 
@@ -116,11 +134,19 @@ See examples/sample-spread.sh for:
 
 ## Notes for Claude
 
-**BEFORE PROCEEDING**: Check if git-filter-repo is installed by running `which git-filter-repo` or `git filter-repo --version`. If not found, show the installation error (see Error Handling section) and stop.
+**IMPLEMENTATION APPROACH**: Use `git commit-tree` instead of `git filter-repo`. Why?
+- `git commit-tree` is the lowest-level git command that directly creates commit objects
+- It guarantees timestamp control via `GIT_AUTHOR_DATE`/`GIT_COMMITTER_DATE` environment variables
+- Higher-level tools (git filter-repo, git rebase) have limitations for timestamp-only rewrites
+- **Critical**: This approach rebuilds commits (new hashes) but preserves ALL content—no file diffs change
+
+**BEFORE PROCEEDING**: Verify git is available and working (`git --version`).
 
 - Always confirm dates with user (parse flexible formats: "March 13", "3/13", "2026-03-13")
 - Time preference should default to random 14:00-17:00 if user doesn't specify
-- Emphasize that **only timestamps change**, not code
+- Emphasize that **only timestamps change**, file content is 100% identical (zero diff changes)
+- Note to user: "New commit hashes will be generated, but all code/diffs remain unchanged"
 - If commits are pushed, be clear: rewriting after push requires force-pushing and affects collaborators
 - Show commit hashes and subjects so user can verify they're rewriting the right commits
 - Check for dirty working directory before proceeding (uncommitted changes must be stashed/committed)
+- After rewrite, show old→new commit hash mapping so user understands the history rewrite
