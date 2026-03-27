@@ -23,7 +23,7 @@ After work is complete, use the `/lazy-commit spread` skill to rewrite commit ti
 - ✅ Retroactive timestamp rewriting (no content changes)
 - ✅ Flexible commit selection (since branch point or custom hash)
 - ✅ Multiple spacing strategies (even distribution or weighted by work)
-- ✅ Safety guardrails (refuse if pushed, require confirmation)
+- ✅ Safety guardrails (strict local-only scope + preflight checks)
 - ✅ Interactive prompt (asks for time-of-day preference)
 
 ## Usage
@@ -35,14 +35,15 @@ Simply ask Claude:
 ```
 
 Claude will:
-1. Detect current branch and commits since main
+1. Detect current branch and local-only commits (`@{u}..HEAD`)
 2. Ask if you want to select commits differently
 3. Ask how to distribute timestamps (evenly or weighted by file changes)
 4. Ask for time-of-day preference (default: random afternoon)
-5. Show commits that will be rewritten
-6. Require confirmation before applying changes
-7. Rewrite commits using `git filter-repo` (with `git commit-tree` fallback) with calculated timestamps
-8. Display before/after comparison
+5. Run preflight guardrails (clean tree, not behind upstream, unsynced commits exist)
+6. Show commits that will be rewritten
+7. Require confirmation before applying changes
+8. Rewrite commits using `git filter-repo` (with `git commit-tree` fallback) with calculated timestamps
+9. Display before/after comparison
 
 ## Prerequisites
 
@@ -115,9 +116,9 @@ The skill uses **`git filter-repo --commit-callback`** (industry standard, 10x f
 
 ## Safety
 
-- **Refuses on pushed branches**: Won't rewrite if commits exist on remote
+- **Strict local-only scope**: Rewrites only unsynced commits (`@{u}..HEAD`)
+- **Refuses when behind upstream**: Won't rewrite if local branch is behind remote
 - **Requires confirmation**: Shows preview before applying
-- **Backs up metadata**: Stores original dates for reference
 - **Reversible**: Original commits can be restored if needed
 
 ## Future Enhancements

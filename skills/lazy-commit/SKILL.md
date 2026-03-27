@@ -44,7 +44,8 @@ Users will invoke this skill with requests like:
 - ✅ **Post-rewrite verification**: After rewrite, run `git fsck --full` again and verify file counts match
 
 **User Protection:**
-- ✅ Refuse if commits are already pushed to remote (will show error with instructions)
+- ✅ Strict local-only scope: only rewrite commits in `@{u}..HEAD`
+- ✅ Refuse if branch is behind upstream (`HEAD..@{u}` non-zero)
 - ✅ Require explicit confirmation before rewriting
 - ✅ Show exact commits and timestamps before applying
 - ✅ Display old→new commit hash mapping after rewrite
@@ -59,26 +60,33 @@ Users will invoke this skill with requests like:
 ## Implementation Steps
 
 1. Parse user's request for start and end dates
-2. Detect current git branch and its merge-base with main
-3. List commits between merge-base and HEAD
+2. Detect current branch and upstream (`@{u}`)
+3. Build rewrite scope from local-only commits: `@{u}..HEAD`
 4. **Ask user** (interactive):
    - Confirm commit range: "Rewrite [N] commits? (Y/n)" or "Use different range?"
    - Choose distribution: "Spread evenly (1/day) or weighted by file changes?"
    - Choose time: "Time of day? (default: random 14:00-17:00)"
-5. Check if commits are pushed: `git rev-list @{u}..HEAD` (if non-zero, refuse)
+5. **Preflight guardrails**:
+   - Verify not detached: `git symbolic-ref -q --short HEAD`
+   - Verify clean working tree: `git status --porcelain` is empty
+   - Verify local-only commits exist: `git rev-list @{u}..HEAD --count` > 0
+   - Verify not behind upstream: `git rev-list HEAD..@{u} --count` = 0
 6. Calculate timestamps:
    - If **evenly**: date1 + (i × daySpan / commitCount) for each commit i
    - If **weighted**: proportion = (filesChanged_i / totalFilesChanged); date1 + (proportion × daySpan) for each commit i
-7. Rebuild commits using `git filter-repo --commit-callback` with Python:
+7. Rebuild commits using `git filter-repo --refs "@{u}..HEAD" --commit-callback --force` with Python:
    - Build a timestamp list indexed by commit order: `[b'<ts1> <tz>', b'<ts2> <tz>', ...]`
-   - Execute `git filter-repo --commit-callback` with Python code that:
+   - Execute `git filter-repo --commit-callback --force` with Python code that:
      - Uses `sys._callback_counter` for persistent state across callback invocations
      - Assigns bytes to `commit.author_date` and `commit.committer_date` (format: `b'<timestamp> <timezone>'`)
      - Preserves all other commit metadata (message, author name/email, parents, encoding)
    - **Fallback**: If git-filter-repo fails, use `git commit-tree` with environment variables:
      - For each commit in topological order, set `GIT_AUTHOR_DATE="<ts> <tz>"` and `GIT_COMMITTER_DATE="<ts> <tz>"` before invoking `git commit-tree`
      - Rebuild parent chain manually (slightly more complex but no external dependencies)
-8. Show results: before/after timestamps with old→new commit hash mapping
+8. **Integrity checks**:
+   - Run `git fsck --full`
+   - Ensure rewritten scope commit count is unchanged
+9. Show results: before/after timestamps + old→new commit hash mapping
 
 ## Input/Output
 
@@ -96,11 +104,12 @@ Users will invoke this skill with requests like:
 
 ## Error Handling
 
-- **git filter-repo not installed** (CRITICAL):
+- **git filter-repo not installed**:
   ```
   ❌ ERROR: git-filter-repo not found
 
-  This tool is required to rewrite git commit timestamps.
+  `git-filter-repo` is recommended for speed, but not required.
+  Use fallback mode (`git commit-tree`) to continue without installing it.
 
   Install it for your platform:
 
@@ -114,10 +123,11 @@ Users will invoke this skill with requests like:
   📦 Windows (pip):
      pip install git-filter-repo
 
-  Then run the skill again.
+  Or continue now with fallback mode.
   ```
 
-- **Commits already pushed**: Show error: "Cannot rewrite pushed commits. Run `git push --force` only if you control this branch."
+- **No local-only commits**: "No unsynced commits found in `@{u}..HEAD`."
+- **Branch behind upstream**: "Branch is behind upstream. Pull/rebase first; rewrite is blocked."
 - **User declines**: "Aborted. No changes made."
 - **Invalid date range**: "End date must be after start date. Please try again."
 - **No commits found**: "No commits found in range. Check your branch/date selection."
@@ -130,7 +140,7 @@ See references/git-filter-repo.md for:
 - Understanding GIT_AUTHOR_DATE vs GIT_COMMITTER_DATE
 - Reversing changes if needed
 
-See examples/sample-spread.sh for:
+See examples/spread-commits.sh for:
 - Actual git filter-repo command syntax
 - Timestamp calculation logic
 - Error handling patterns
@@ -146,6 +156,8 @@ See examples/sample-spread.sh for:
 - **Key implementation detail**: Use `sys` module for persistent state across callback invocations (local variables don't persist)
 - **Format**: Assign bytes directly: `commit.author_date = b'<timestamp> <+timezone>'` (e.g., `b'1772353800 +0000'`)
 - Callback body only (no `def callback(commit):` wrapper—git-filter-repo adds that automatically)
+- Use partial-scope rewrite (`--refs "@{u}..HEAD"`) for strict local-only behavior
+- **Important**: Include `--force` flag; both `--refs` and `--partial` automatically preserve the origin remote (confirmed by maintainer: github.com/newren/git-filter-repo/issues/46)
 
 **Fallback (git commit-tree)**:
 - Lower-level but reliable approach

@@ -13,6 +13,8 @@ Three tested methods for rewriting commit timestamps (in order of preference):
 - **Speed**: Fast (single pass, 10x faster than filter-branch)
 - **Format**: Python callback with bytes assignment
 - **Key detail**: Use `sys._callback_counter` for persistent state across invocations
+- **Command pattern**: `git filter-repo --refs @{u}..HEAD --commit-callback --force`
+- **Important**: Both `--refs` and `--partial` preserve the origin remote automatically (confirmed by maintainer: github.com/newren/git-filter-repo/issues/46)
 - **Code**:
   ```python
   import sys
